@@ -15,9 +15,7 @@ var (
 	host = flag.String("host", "0.0.0.0", "host to listen on")
 	port = flag.Int("port", 27010, "port to listen on")
 
-	blockSize = flag.Int("size", 1024, "block size to read packets on")
-
-	file = flag.String("file", "servers", "file with server list")
+	file = flag.String("file", "servers.txt", "file with server list")
 )
 
 func main() {
@@ -38,7 +36,7 @@ func main() {
 		return
 	}
 
-	data := make([]byte, *blockSize)
+	data := make([]byte, 1024)
 
 	for {
 		n, remoteAddr, err := listener.ReadFromUDP(data)
@@ -52,17 +50,14 @@ func main() {
 		binary.Write(buf, binary.LittleEndian, []byte{0xFF, 0xFF, 0xFF, 0xFF, 0x66, 0x0A})
 
 		for _, server := range serverlist {
-			server = strings.TrimSpace(server)
 			host, port, err := net.SplitHostPort(server)
 			if err != nil {
-				fmt.Println(err, server)
 				continue
 			}
 
 			ip = net.ParseIP(host).To4()
 			if ip == nil {
-				fmt.Printf("%v is not an IP address\n", ip)
-				return
+				continue
 			}
 
 			port_i, _ := strconv.Atoi(port)
