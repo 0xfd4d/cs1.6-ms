@@ -1,14 +1,14 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/binary"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"net"
-	"os"
 	"strconv"
+	"strings"
 )
 
 var (
@@ -22,23 +22,21 @@ var (
 
 func main() {
 	flag.Parse()
+
+	file, err := ioutil.ReadFile(*file)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	serverlist := strings.Split(string(file), "\n")
+
 	ip := net.ParseIP(*host)
+
 	listener, err := net.ListenUDP("udp", &net.UDPAddr{IP: ip, Port: *port})
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-
-	serverlist, err := os.Open(*file)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	defer serverlist.Close()
-
-	reader := bufio.NewReader(serverlist)
-	scanner := bufio.NewScanner(reader)
 
 	data := make([]byte, *blockSize)
 
@@ -53,17 +51,20 @@ func main() {
 
 		binary.Write(buf, binary.LittleEndian, []byte{0xFF, 0xFF, 0xFF, 0xFF, 0x66, 0x0A})
 
-		for scanner.Scan() {
-			host, port, err := net.SplitHostPort(scanner.Text())
+		for _, server := range serverlist {
+			server = strings.TrimSpace(server)
+			host, port, err := net.SplitHostPort(server)
 			if err != nil {
-				fmt.Println(err)
-				return
+				fmt.Println(err, server)
+				continue
 			}
+
 			ip = net.ParseIP(host).To4()
 			if ip == nil {
 				fmt.Printf("%v is not an IP address\n", ip)
 				return
 			}
+
 			port_i, _ := strconv.Atoi(port)
 			port_i16 := int16(port_i)
 			port_o := port_i16<<8 | port_i16>>8
@@ -73,8 +74,6 @@ func main() {
 		}
 
 		binary.Write(buf, binary.LittleEndian, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00})
-
-		fmt.Printf("ip: % x\n", buf.Bytes())
 
 		_, err = listener.WriteToUDP(buf.Bytes(), remoteAddr)
 
