@@ -5,32 +5,42 @@ import (
 	"encoding/binary"
 	"flag"
 	"fmt"
+	"github.com/BurntSushi/toml"
 	"io/ioutil"
 	"net"
 	"strconv"
 	"strings"
 )
 
-var (
-	host = flag.String("host", "0.0.0.0", "host to listen on")
-	port = flag.Int("port", 27010, "port to listen on")
+type Config struct {
+	Host string
+	Port int
+	File string
+}
 
-	file = flag.String("file", "servers.txt", "file with server list")
+var (
+	configFile = flag.String("config", "ms.cfg", "config file")
 )
 
 func main() {
 	flag.Parse()
+	var config Config
 
-	file, err := ioutil.ReadFile(*file)
+	if _, err := toml.DecodeFile(*configFile, &config); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	file, err := ioutil.ReadFile(config.File)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 	serverlist := strings.Split(string(file), "\n")
 
-	ip := net.ParseIP(*host)
+	ip := net.ParseIP(config.Host)
 
-	listener, err := net.ListenUDP("udp", &net.UDPAddr{IP: ip, Port: *port})
+	listener, err := net.ListenUDP("udp", &net.UDPAddr{IP: ip, Port: config.Port})
 	if err != nil {
 		fmt.Println(err)
 		return
