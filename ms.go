@@ -41,14 +41,17 @@ func main() {
 	scanner := bufio.NewScanner(reader)
 
 	data := make([]byte, *blockSize)
+
 	for {
-		n, remoteAddr, err := listener.ReadFrom(data)
+		n, remoteAddr, err := listener.ReadFromUDP(data)
 		if err != nil {
 			fmt.Printf("error during read: %s", err)
 			return
 		}
 
 		buf := new(bytes.Buffer)
+
+		binary.Write(buf, binary.LittleEndian, []byte{0xFF, 0xFF, 0xFF, 0xFF, 0x66, 0x0A})
 
 		for scanner.Scan() {
 			host, port, err := net.SplitHostPort(scanner.Text())
@@ -67,8 +70,16 @@ func main() {
 
 			binary.Write(buf, binary.LittleEndian, ip)
 			binary.Write(buf, binary.LittleEndian, port_o)
+		}
 
-			fmt.Printf("ip: % x\n", buf.Bytes())
+		binary.Write(buf, binary.LittleEndian, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00})
+
+		fmt.Printf("ip: % x\n", buf.Bytes())
+
+		_, err = listener.WriteToUDP(buf.Bytes(), remoteAddr)
+
+		if err != nil {
+			fmt.Println(err)
 		}
 
 		fmt.Printf("<%s> %s\n", remoteAddr, data[:n])
