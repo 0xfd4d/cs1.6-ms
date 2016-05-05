@@ -2,10 +2,12 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/binary"
 	"flag"
 	"fmt"
 	"github.com/BurntSushi/toml"
+	_ "github.com/go-sql-driver/mysql"
 	"io/ioutil"
 	"net"
 	"strconv"
@@ -16,27 +18,66 @@ type Config struct {
 	Host string
 	Port int
 	File string
+
+	Usedb bool
+
+	Dbtype string
+	Dburl  string
+
+	Dbquery string
 }
 
 var (
 	configFile = flag.String("config", "ms.cfg", "config file")
+	config     Config
 )
+
+func GetServerList() []string {
+	var serverlist []string
+
+	if config.Usedb == true {
+		db, err := sql.Open(config.Dbtype, config.Dburl)
+		if err != nil {
+			fmt.Println(err.Error())
+		}
+		defer db.Close()
+
+		rows, err := db.Query(config.Dbquery)
+		if err != nil {
+			fmt.Println(err.Error())
+		}
+		defer rows.Close()
+
+		var dbAddress string
+		for rows.Next() {
+			err := rows.Scan(&dbAddress)
+			if err != nil {
+				fmt.Println(err)
+			}
+			serverlist = append(serverlist, dbAddress)
+		}
+		err = rows.Err()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}
+	file, err := ioutil.ReadFile(config.File)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	serverlist = append(serverlist, strings.Split(string(file), "\n")...)
+
+	return serverlist
+}
 
 func main() {
 	flag.Parse()
-	var config Config
 
 	if _, err := toml.DecodeFile(*configFile, &config); err != nil {
 		fmt.Println(err)
 		return
 	}
-
-	file, err := ioutil.ReadFile(config.File)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	serverlist := strings.Split(string(file), "\n")
 
 	ip := net.ParseIP(config.Host)
 
@@ -45,6 +86,8 @@ func main() {
 		fmt.Println(err)
 		return
 	}
+
+	serverlist := GetServerList()
 
 	data := make([]byte, 1024)
 
