@@ -17,14 +17,17 @@ import (
 type Config struct {
 	Host string
 	Port int
-	File string
 
-	Usedb bool
+	Send_response_end bool
 
-	Dbtype string
-	Dburl  string
+	Use_file bool
+	File     string
 
-	Dbquery string
+	Use_db  bool
+	Db_type string
+	Db_url  string
+
+	Db_query string
 }
 
 var (
@@ -35,14 +38,14 @@ var (
 func GetServerList() []string {
 	var serverlist []string
 
-	if config.Usedb == true {
-		db, err := sql.Open(config.Dbtype, config.Dburl)
+	if config.Use_db == true {
+		db, err := sql.Open(config.Db_type, config.Db_url)
 		if err != nil {
 			fmt.Println(err.Error())
 		}
 		defer db.Close()
 
-		rows, err := db.Query(config.Dbquery)
+		rows, err := db.Query(config.Db_query)
 		if err != nil {
 			fmt.Println(err.Error())
 		}
@@ -61,12 +64,14 @@ func GetServerList() []string {
 			fmt.Println(err)
 		}
 	}
-	file, err := ioutil.ReadFile(config.File)
-	if err != nil {
-		fmt.Println(err)
-	}
 
-	serverlist = append(serverlist, strings.Split(string(file), "\n")...)
+	if config.Use_file == true {
+		file, err := ioutil.ReadFile(config.File)
+		if err != nil {
+			fmt.Println(err)
+		}
+		serverlist = append(serverlist, strings.Split(string(file), "\n")...)
+	}
 
 	return serverlist
 }
@@ -121,7 +126,9 @@ func main() {
 			binary.Write(buf, binary.LittleEndian, port_o)
 		}
 
-		binary.Write(buf, binary.LittleEndian, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00})
+		if config.Send_response_end == true {
+			binary.Write(buf, binary.LittleEndian, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00})
+		}
 
 		_, err = listener.WriteToUDP(buf.Bytes(), remoteAddr)
 
