@@ -20,14 +20,17 @@ type Config struct {
 
 	Send_response_end bool
 
-	Use_file bool
-	File     string
+	Use_file    bool
+	Server_file string
 
 	Use_db  bool
 	Db_type string
 	Db_url  string
 
 	Db_query string
+
+	Use_banlist  bool
+	Banlist_file string
 }
 
 var (
@@ -35,42 +38,86 @@ var (
 	config     Config
 )
 
+func GetServerListDB() []string {
+	var serverlist []string
+	db, err := sql.Open(config.Db_type, config.Db_url)
+	if err != nil {
+		fmt.Println(err.Error())
+		return nil
+	}
+	defer db.Close()
+
+	err = db.Ping()
+	if err != nil {
+		fmt.Println(err.Error())
+		return nil
+	}
+
+	rows, err := db.Query(config.Db_query)
+	if err != nil {
+		fmt.Println(err.Error())
+		return nil
+	}
+	defer rows.Close()
+
+	var dbAddress string
+	for rows.Next() {
+		err := rows.Scan(&dbAddress)
+		if err != nil {
+			fmt.Println(err)
+		}
+		serverlist = append(serverlist, dbAddress)
+	}
+	err = rows.Err()
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+	return serverlist
+}
+
+func FilterBanlist(serverlist []string) []string {
+	file, err := ioutil.ReadFile(config.Banlist_file)
+	if err != nil {
+		fmt.Println(err)
+		return serverlist
+	}
+	var new_serverlist []string
+	banlist := strings.Split(string(file), "\n")
+
+	for _, server := range serverlist {
+		banned := false
+		for _, bserver := range banlist {
+			if bserver == server {
+				banned = true
+			}
+		}
+		if banned == false {
+			new_serverlist = append(new_serverlist, server)
+		}
+
+	}
+
+	return new_serverlist
+}
+
 func GetServerList() []string {
 	var serverlist []string
 
 	if config.Use_db == true {
-		db, err := sql.Open(config.Db_type, config.Db_url)
-		if err != nil {
-			fmt.Println(err.Error())
-		}
-		defer db.Close()
-
-		rows, err := db.Query(config.Db_query)
-		if err != nil {
-			fmt.Println(err.Error())
-		}
-		defer rows.Close()
-
-		var dbAddress string
-		for rows.Next() {
-			err := rows.Scan(&dbAddress)
-			if err != nil {
-				fmt.Println(err)
-			}
-			serverlist = append(serverlist, dbAddress)
-		}
-		err = rows.Err()
-		if err != nil {
-			fmt.Println(err)
-		}
+		serverlist = GetServerListDB()
 	}
 
 	if config.Use_file == true {
-		file, err := ioutil.ReadFile(config.File)
+		file, err := ioutil.ReadFile(config.Server_file)
 		if err != nil {
 			fmt.Println(err)
 		}
 		serverlist = append(serverlist, strings.Split(string(file), "\n")...)
+	}
+
+	if config.Use_banlist {
+		serverlist = FilterBanlist(serverlist)
 	}
 
 	return serverlist
