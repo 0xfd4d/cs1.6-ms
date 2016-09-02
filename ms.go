@@ -40,7 +40,6 @@ func GetServerListDB() []string {
 		return nil
 	}
 	defer db.Close()
-
 	err = db.Ping()
 	if err != nil {
 		fmt.Println(err.Error())
@@ -115,12 +114,12 @@ func main() {
 		return
 	}
 	ip := net.ParseIP(config.Host)
-
 	listener, err := net.ListenUDP("udp", &net.UDPAddr{IP: ip, Port: config.Port})
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
+	serverlist := GetServerList()
 	data := make([]byte, 1024)
 	for {
 		n, remoteAddr, err := listener.ReadFromUDP(data)
