@@ -15,20 +15,14 @@ import (
 )
 
 type Config struct {
-	Host string
-	Port int
-
-	Send_response_end bool
-
-	Use_file    bool
-	Server_file string
-
-	Use_db  bool
-	Db_type string
-	Db_url  string
-
-	Db_query string
-
+	Host         string
+	Port         int
+	Use_file     bool
+	Server_file  string
+	Use_db       bool
+	Db_type      string
+	Db_url       string
+	Db_query     string
 	Use_banlist  bool
 	Banlist_file string
 }
@@ -52,14 +46,12 @@ func GetServerListDB() []string {
 		fmt.Println(err.Error())
 		return nil
 	}
-
 	rows, err := db.Query(config.Db_query)
 	if err != nil {
 		fmt.Println(err.Error())
 		return nil
 	}
 	defer rows.Close()
-
 	var dbAddress string
 	for rows.Next() {
 		err := rows.Scan(&dbAddress)
@@ -84,7 +76,6 @@ func FilterBanlist(serverlist []string) []string {
 	}
 	var new_serverlist []string
 	banlist := strings.Split(string(file), "\n")
-
 	for _, server := range serverlist {
 		banned := false
 		for _, bserver := range banlist {
@@ -95,19 +86,15 @@ func FilterBanlist(serverlist []string) []string {
 		if banned == false {
 			new_serverlist = append(new_serverlist, server)
 		}
-
 	}
-
 	return new_serverlist
 }
 
 func GetServerList() []string {
 	var serverlist []string
-
 	if config.Use_db == true {
 		serverlist = GetServerListDB()
 	}
-
 	if config.Use_file == true {
 		file, err := ioutil.ReadFile(config.Server_file)
 		if err != nil {
@@ -115,22 +102,18 @@ func GetServerList() []string {
 		}
 		serverlist = append(serverlist, strings.Split(string(file), "\n")...)
 	}
-
 	if config.Use_banlist {
 		serverlist = FilterBanlist(serverlist)
 	}
-
 	return serverlist
 }
 
 func main() {
 	flag.Parse()
-
 	if _, err := toml.DecodeFile(*configFile, &config); err != nil {
 		fmt.Println(err)
 		return
 	}
-
 	ip := net.ParseIP(config.Host)
 
 	listener, err := net.ListenUDP("udp", &net.UDPAddr{IP: ip, Port: config.Port})
@@ -138,51 +121,37 @@ func main() {
 		fmt.Println(err)
 		return
 	}
-
-	serverlist := GetServerList()
-
 	data := make([]byte, 1024)
-
 	for {
 		n, remoteAddr, err := listener.ReadFromUDP(data)
 		if err != nil {
 			fmt.Printf("error during read: %s", err)
 			return
 		}
-
 		buf := new(bytes.Buffer)
-
 		binary.Write(buf, binary.LittleEndian, []byte{0xFF, 0xFF, 0xFF, 0xFF, 0x66, 0x0A})
+		if strings.Contains(string(data[:n]), "0.0.0.0") {
+			for _, server := range serverlist {
+				host, port, err := net.SplitHostPort(server)
+				if err != nil {
+					continue
+				}
+				ip = net.ParseIP(host).To4()
+				if ip == nil {
+					continue
+				}
+				port_i, _ := strconv.Atoi(port)
+				port_i16 := int16(port_i)
+				port_o := port_i16<<8 | port_i16>>8
 
-		for _, server := range serverlist {
-			host, port, err := net.SplitHostPort(server)
-			if err != nil {
-				continue
+				binary.Write(buf, binary.LittleEndian, ip)
+				binary.Write(buf, binary.LittleEndian, port_o)
 			}
-
-			ip = net.ParseIP(host).To4()
-			if ip == nil {
-				continue
-			}
-
-			port_i, _ := strconv.Atoi(port)
-			port_i16 := int16(port_i)
-			port_o := port_i16<<8 | port_i16>>8
-
-			binary.Write(buf, binary.LittleEndian, ip)
-			binary.Write(buf, binary.LittleEndian, port_o)
 		}
-
-		if config.Send_response_end == true {
-			binary.Write(buf, binary.LittleEndian, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00})
-		}
-
 		_, err = listener.WriteToUDP(buf.Bytes(), remoteAddr)
-
 		if err != nil {
 			fmt.Println(err)
 		}
-
 		fmt.Printf("<%s> %s\n", remoteAddr, data[:n])
 	}
 }
