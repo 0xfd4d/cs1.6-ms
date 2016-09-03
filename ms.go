@@ -12,6 +12,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Config struct {
@@ -28,9 +29,18 @@ type Config struct {
 }
 
 var (
-	configFile = flag.String("config", "ms.cfg", "config file")
-	config     Config
+	configFile  = flag.String("config", "ms.cfg", "config file")
+	config      Config
+	server_list []string
 )
+
+func WriteToServerList() {
+	for {
+		server_list = GetServerList()
+		fmt.Println("Checked")
+		time.Sleep(60 * time.Second)
+	}
+}
 
 func GetServerListDB() []string {
 	var serverlist []string
@@ -119,7 +129,7 @@ func main() {
 		fmt.Println(err)
 		return
 	}
-	serverlist := GetServerList()
+	go WriteToServerList()
 	data := make([]byte, 1024)
 	for {
 		n, remoteAddr, err := listener.ReadFromUDP(data)
@@ -130,7 +140,7 @@ func main() {
 		buf := new(bytes.Buffer)
 		binary.Write(buf, binary.LittleEndian, []byte{0xFF, 0xFF, 0xFF, 0xFF, 0x66, 0x0A})
 		if strings.Contains(string(data[:n]), "0.0.0.0") {
-			for _, server := range serverlist {
+			for _, server := range server_list {
 				host, port, err := net.SplitHostPort(server)
 				if err != nil {
 					continue
