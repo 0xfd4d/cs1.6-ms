@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"flag"
 	"fmt"
-	"github.com/BurntSushi/toml"
 	_ "github.com/go-sql-driver/mysql"
 	"io/ioutil"
 	"net"
@@ -15,36 +14,32 @@ import (
 	"time"
 )
 
-type Config struct {
-	Host         string
-	Port         int
-	Use_file     bool
-	Server_file  string
-	Use_db       bool
-	Db_type      string
-	Db_url       string
-	Db_query     string
-	Use_banlist  bool
-	Banlist_file string
-}
+var listen = flag.String("listen", "0.0.0.0", "ip address to listen")
+var port = flag.Int("port", 27010, "port")
+var useServerFile = flag.Bool("use-file", true, "use file containing ip address list")
+var serverFile = flag.String("file", "servers.txt", "path to file")
+var useDB = flag.Bool("use-db", false, "use database to fetch ip address list")
+var DBType = flag.String("db-type", "mysql", "database type")
+var DBURL = flag.String("db-url", "dbuser:dbpass@tcp(127.0.0.1:3306)/dbname", "database connection url")
+var DBQuery = flag.String("db-query", "SELECT address FROM servers", "database query to fetch ip address list")
+var useBanlist = flag.Bool("use-banlist", true, "use banlist to filter from ip address list")
+var BanlistFile = flag.String("banlist-file", "banlist.txt", "banlist")
 
 var (
-	configFile  = flag.String("config", "ms.cfg", "config file")
-	config      Config
 	server_list []string
 )
 
 func WriteToServerList() {
 	for {
 		server_list = GetServerList()
-		fmt.Println("Checked")
+		fmt.Println("checked")
 		time.Sleep(60 * time.Second)
 	}
 }
 
 func GetServerListDB() []string {
 	var serverlist []string
-	db, err := sql.Open(config.Db_type, config.Db_url)
+	db, err := sql.Open(*DBType, *DBURL)
 	if err != nil {
 		fmt.Println(err.Error())
 		return nil
@@ -55,7 +50,7 @@ func GetServerListDB() []string {
 		fmt.Println(err.Error())
 		return nil
 	}
-	rows, err := db.Query(config.Db_query)
+	rows, err := db.Query(*DBQuery)
 	if err != nil {
 		fmt.Println(err.Error())
 		return nil
@@ -78,7 +73,7 @@ func GetServerListDB() []string {
 }
 
 func FilterBanlist(serverlist []string) []string {
-	file, err := ioutil.ReadFile(config.Banlist_file)
+	file, err := ioutil.ReadFile(*BanlistFile)
 	if err != nil {
 		fmt.Println(err)
 		return serverlist
@@ -101,17 +96,17 @@ func FilterBanlist(serverlist []string) []string {
 
 func GetServerList() []string {
 	var serverlist []string
-	if config.Use_db == true {
+	if *useDB == true {
 		serverlist = GetServerListDB()
 	}
-	if config.Use_file == true {
-		file, err := ioutil.ReadFile(config.Server_file)
+	if *useServerFile == true {
+		file, err := ioutil.ReadFile(*serverFile)
 		if err != nil {
 			fmt.Println(err)
 		}
 		serverlist = append(serverlist, strings.Split(string(file), "\n")...)
 	}
-	if config.Use_banlist {
+	if *useBanlist {
 		serverlist = FilterBanlist(serverlist)
 	}
 	return serverlist
@@ -119,12 +114,8 @@ func GetServerList() []string {
 
 func main() {
 	flag.Parse()
-	if _, err := toml.DecodeFile(*configFile, &config); err != nil {
-		fmt.Println(err)
-		return
-	}
-	ip := net.ParseIP(config.Host)
-	listener, err := net.ListenUDP("udp", &net.UDPAddr{IP: ip, Port: config.Port})
+	ip := net.ParseIP(*listen)
+	listener, err := net.ListenUDP("udp", &net.UDPAddr{IP: ip, Port: *port})
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -152,7 +143,6 @@ func main() {
 				port_i, _ := strconv.Atoi(port)
 				port_i16 := int16(port_i)
 				port_o := port_i16<<8 | port_i16>>8
-
 				binary.Write(buf, binary.LittleEndian, ip)
 				binary.Write(buf, binary.LittleEndian, port_o)
 			}
